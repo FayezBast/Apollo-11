@@ -89,6 +89,16 @@
 [ML]:Translations/README.ml.md
 Original Apollo 11 guidance computer (AGC) source code for Command Module (Comanche055) and Lunar Module (Luminary099). Digitized by the folks at [Virtual AGC][3] and [MIT Museum][4]. The goal is to be a repo for the original Apollo 11 source code. As such, PRs are welcome for any issues identified between the transcriptions in this repository and the original source scans for [Luminary 099][5] and [Comanche 055][6], as well as any files I may have missed.
 
+## Mission console (this fork)
+
+Run `npm start` to open our terminal launcher. Choose an Apollo source explorer,
+a numeric command reference, an Arzi descent animation, or an alarm laboratory.
+Use arrows or J/K to select, Enter to open, and Esc to return.
+
+Requires Python 3.10+ with curses on macOS or Linux. No dependency installation is
+needed; you can also run `python3 launcher/main.py` directly.
+See [the launcher guide](launcher/README.md) for controls and limitations.
+
 ## Contributing
 
 Please read [CONTRIBUTING.md][7] before opening a pull request.

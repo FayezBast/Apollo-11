@@ -1,7 +1,9 @@
 {
   "scripts": {
-    "lint": "markdownlint-cli2 *.md translations/*.md Comanche055/*.md Luminary099/*.md --config .markdownlint.yml",
-    "lint:fix": "markdownlint-cli2 *.md translations/*.md Comanche055/*.md Luminary099/*.md --config .markdownlint.yml --fix"
+    "start": "python3 launcher/main.py",
+    "test:launcher": "python3 -m unittest discover -s launcher -p 'test_*.py'",
+    "lint": "markdownlint-cli2 *.md translations/*.md Comanche055/*.md Luminary099/*.md launcher/*.md --config .markdownlint.yml",
+    "lint:fix": "markdownlint-cli2 *.md translations/*.md Comanche055/*.md Luminary099/*.md launcher/*.md --config .markdownlint.yml --fix"
   },
   "dependencies": {},
   "devDependencies": {
