@@ -1,7 +1,7 @@
 # Apollo 11 mission console
 
 An original terminal launcher for this fork, built from scratch with Python's
-standard library. It bundles four working tools in a single menu.
+standard library. It bundles five working tools in a single menu.
 
 ## Start
 
@@ -26,7 +26,7 @@ For a plain-text tool list, use `python3 launcher/main.py --list`.
 
 ## The menu
 
-Use arrows or **J/K** to choose a tool, **Enter** to open it, or **1–4** to launch
+Use arrows or **J/K** to choose a tool, **Enter** to open it, or **1–5** to launch
 directly. **Esc**, **B**, or **Q** returns one level; Q on the main menu exits.
 The shell's terminal settings are restored when the application exits, including
 on Ctrl+C. Tools do not write to the Apollo source files.
@@ -37,6 +37,7 @@ on Ctrl+C. Tools do not write to the Apollo source files.
 | Command reference | Six numeric sequences with their meanings, individual keys, and links into the local assembly listing. |
 | Animated scenes | Six original Arzi scenes with orbit, descent, landing, liftoff, astronauts, and a playful platform sequence. |
 | Alarm laboratory | An interactive teaching model of finite core-set and VAC pools, overload, and restart recovery. |
+| DSKY computer panel | A green guidance-computer display, keypad, verb/noun entry, warning lights, and scripted Arzi descent readings. |
 
 ### Source explorer
 
@@ -121,6 +122,62 @@ not a CPU emulator or a historical replay. It models one resource-pressure idea;
 it does not execute the original assembly. The main menu, animation, and alarm
 model are independent tools.
 
+### DSKY computer panel
+
+Choose **5** from the main menu. The panel includes PROG, VERB, NOUN, three signed
+readouts, a keypad, and eleven annunciators. A terminal with at least 32 rows
+shows large segmented digits; shorter terminals show compact values. Wider
+terminals also show flight cards and descent progress. Press **?** to see all
+commands at any terminal size.
+Type command cards directly, with or without spaces. After using the arrows to
+focus a keypad button, Space presses that button instead.
+
+Start with `V35 E` to test the lights. Then type `V37 E 63 E` to start a
+90-second scripted descent. The panel selects V16 N60 automatically: horizontal
+speed in feet/second, vertical rate in feet/second, and altitude in feet.
+It advances through P63 braking, P64 approach, P66 final descent, and contact.
+At T+35 seconds, a scripted 01202 overload lights PROG and holds the descent;
+press **P** (PRO) to acknowledge it and continue. The pause for acknowledgment
+is part of this teaching scenario, not historical restart behavior.
+
+| Command | Action in this panel |
+| --- | --- |
+| V35 E | Illuminate every lamp and display segment for five seconds |
+| V37 E 63 E | Start or replay the descent |
+| V16 N60 E | Monitor horizontal speed, altitude rate, and altitude |
+| V16 N63 E | Monitor total speed, altitude rate, and altitude |
+| V16 N65 E | Monitor the panel's hours, minutes, and seconds |
+| V06 N60 E | Hold a snapshot while the descent continues |
+| V05 N09 E | Show the three alarm-code registers in octal, newest first |
+| V37 E 00 E | Select idle and stop the descent at its current readings |
+| V36 E | Fresh start: clear the scenario, alarm history, entries, and clock |
+
+The noun meanings and units follow the local
+[Luminary verb/noun table](../Luminary099/ASSEMBLY_AND_OPERATION_INFORMATION.agc).
+**The telemetry, 90-second timeline, program transitions, and overload event
+are invented teaching values.** This panel does not execute AGC instructions or
+control the animated-scene collection.
+
+| Keyboard | Panel action |
+| --- | --- |
+| V / N | Select VERB / NOUN entry |
+| 0–9 | Enter a digit; verb, noun, and program entries require two digits |
+| E or Enter | ENTR: commit the entry and execute the supported command |
+| C / Backspace | CLR: clear the current entry / delete one digit |
+| K | KEY REL: cancel the current entry |
+| R | RSET: clear OPR ERR and the RESTART indicator |
+| P | PRO: acknowledge the scripted descent alarm |
+| Arrows, then Space | Focus a keypad button, then press it |
+| T / ] | Pause or resume / advance five seconds, including while paused |
+| ? / Esc | Open or close command help / close help or return to the launcher |
+
+Unsupported commands and incomplete entries illuminate OPR ERR and leave the
+active telemetry intact. Use CLR or Backspace to correct an entry, or KEY REL
+to cancel it. RSET clears OPR ERR; PRO acknowledges a descent alarm. The +/−
+buttons report that signed register loading is unavailable; the registers are
+read-only. N65 measures time spent in this panel, including standby and alarm
+holds; T freezes it. Returning to the launcher freezes the panel until reopened.
+
 ## Checks
 
 ```sh
@@ -132,4 +189,7 @@ Tests cover opening and returning from every tool, source filtering and failures
 reference-to-source navigation, pause/resume, terminal sizes, path boundaries,
 stable loads, both alarm/recovery paths, deterministic scene replay, full-show
 transitions, seek boundaries, touchdown and settling, Lebanese flag colors and cedar, unfurling and saluting,
-pixel layering, limited terminal palettes, and the platform sequence. No test dependencies are required.
+pixel layering, limited terminal palettes, and the platform sequence. DSKY checks
+cover entry/correction/cancellation, lamp tests, live monitoring versus snapshots,
+alarm acknowledgment and readback, idle and fresh start, clock rollover, keypad
+navigation, help, resizing, and invalid commands. No test dependencies are required.

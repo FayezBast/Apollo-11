@@ -9,6 +9,7 @@ CATALOG = (
     ("manual", "Command reference", "Keep Apollo's verb and noun sequences close at hand."),
     ("scenes", "Animated scenes", "Orbit, land, lift off, and take one small hop with Arzi."),
     ("alarms", "Alarm laboratory", "Explore memory pressure, overload, and 1201 / 1202 recovery."),
+    ("dsky", "DSKY computer panel", "Key in commands. Descend with Arzi."),
 )
 MODULES = (("Luminary099", "Arzi / Lunar Module"), ("Comanche055", "Columbia / Command Module"))
 COMMANDS = (

@@ -1,6 +1,7 @@
 """Behavior checks for the menus and terminal resize handling."""
 
 import unittest
+import curses
 from unittest.mock import patch
 
 from main import Launcher
@@ -32,7 +33,7 @@ class LauncherTests(unittest.TestCase):
         self.app = Launcher(self.screen)
 
     def test_every_menu_destination_opens_returns_and_quit_exits(self):
-        for key, view in [("1", "sources"), ("2", "manual"), ("3", "scenes"), ("4", "alarms")]:
+        for key, view in [("1", "sources"), ("2", "manual"), ("3", "scenes"), ("4", "alarms"), ("5", "dsky")]:
             self.app.handle_key(key)
             self.assertEqual(self.app.view, view)
             self.app.handle_key("q")
@@ -146,10 +147,60 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(self.app.color("pixel:green:white"), self.app.styles["normal"])
             self.assertEqual(self.app.color("pixel:red:white"), first)
 
+    def test_dsky_direct_keyboard_commands_pause_step_and_preserve_state_on_return(self):
+        self.app.handle_key("5")
+        for key in "V37 E 63 E ":
+            self.app.handle_key(key)
+        self.app.tick(10)
+        self.assertEqual((self.app.dsky.program, self.app.dsky.elapsed), ("63", 10))
+        self.app.handle_key("t")
+        self.app.tick(5)
+        self.assertEqual(self.app.dsky.elapsed, 10)
+        self.app.handle_key("]")
+        self.assertEqual(self.app.dsky.elapsed, 15)
+        self.app.handle_key("\x1b")
+        self.app.tick(5)
+        self.app.handle_key("5")
+        self.assertEqual(self.app.dsky.elapsed, 15)
+        self.app.tick(1)
+        self.assertEqual(self.app.dsky.elapsed, 16)
+
+    def test_dsky_keypad_navigation_space_activation_and_enter_submission(self):
+        self.app.handle_key("5")
+        self.app.handle_key(" ")  # VERB is initially selected.
+        for key in "35\n":
+            self.app.handle_key(key)
+        self.assertEqual(self.app.dsky.lamp_left, 5)
+        self.app.handle_key(curses.KEY_UP)
+        self.assertEqual(self.app.dsky_focus, 15)
+        self.app.handle_key(" ")  # KEY REL
+        self.assertFalse(self.app.dsky.editing)
+        self.app.handle_key(curses.KEY_LEFT)
+        self.app.handle_key(curses.KEY_DOWN)
+        self.assertEqual(self.app.dsky_focus, 18)
+        self.app.handle_key(curses.KEY_RIGHT)
+        self.assertEqual(self.app.dsky_focus, 0)
+        self.app.handle_key(" ")
+        self.assertEqual(self.app.dsky.editing, "verb")
+
+    def test_dsky_help_is_available_at_minimum_size_and_escape_closes_it(self):
+        self.app.handle_key("5")
+        self.app.handle_key("?")
+        self.screen.height, self.screen.width = 24, 64
+        self.app.draw()
+        self.assertIn("V37 E 63 E", self.screen.output)
+        self.app.handle_key("3")
+        self.assertEqual(self.app.dsky.program, "00")
+        self.app.handle_key("\x1b")
+        self.assertEqual(self.app.view, "dsky")
+        self.assertFalse(self.app.dsky_help)
+        self.app.handle_key("\x1b")
+        self.assertEqual(self.app.view, "menu")
+
     def test_all_views_fit_normal_narrow_and_tiny_terminal_sizes(self):
-        for height, width in [(32, 110), (24, 64), (10, 30)]:
+        for height, width in [(32, 110), (24, 64), (24, 110), (32, 64), (10, 30)]:
             self.screen.height, self.screen.width = height, width
-            for view in ("menu", "sources", "files", "reader", "manual", "scenes", "scene", "alarms"):
+            for view in ("menu", "sources", "files", "reader", "manual", "scenes", "scene", "alarms", "dsky"):
                 with self.subTest(height=height, width=width, view=view):
                     self.app.view = view
                     self.app.draw()

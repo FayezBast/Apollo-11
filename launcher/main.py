@@ -8,7 +8,7 @@ import textwrap
 import time
 
 from core import AlarmDemo, CATALOG, COMMANDS, MODULES, read_source, source_files
-
+from dsky import Dsky, HELP, KEYPAD, LAMPS, digits
 from scenes import PIXEL_COLORS, SCENES, ScenePlayer, render_scene
 
 
@@ -28,10 +28,14 @@ class Launcher:
         self.player = ScenePlayer()
         self.paused = False
         self.demo = AlarmDemo()
+        self.dsky = Dsky()
+        self.dsky_focus = 0
+        self.dsky_keypad = True
+        self.dsky_help = False
         self.status = ""
         self.alive = True
         self.started = time.monotonic()
-        self.styles = dict.fromkeys(["normal", "dim", "accent", "cyan", "selected", "error"], 0)
+        self.styles = dict.fromkeys(["normal", "dim", "accent", "cyan", "selected", "error", "green"], 0)
         self.color_enabled = False
         self.color_pairs = {}
         self.next_color_pair = 1
@@ -48,7 +52,7 @@ class Launcher:
             curses.set_escdelay(25)
         if curses.has_colors():
             curses.start_color()
-            colors = [252, 244, 214, 81, 234, 203] if curses.COLORS >= 256 else [7, 7, 3, 6, 0, 1]
+            colors = [252, 244, 214, 81, 234, 203, 120] if curses.COLORS >= 256 else [7, 7, 3, 6, 0, 1, 2]
             background = 234 if curses.COLORS >= 256 else 0
             for number, (name, foreground) in enumerate(zip(self.styles, colors), 1):
                 curses.init_pair(number, foreground, colors[2] if name == "selected" else background)
@@ -76,6 +80,8 @@ class Launcher:
             self.player.advance(seconds)
         elif self.view == "alarms":
             self.demo.advance(seconds)
+        elif self.view == "dsky":
+            self.dsky.advance(seconds)
 
     def text(self, y, x, value, style="normal", width=None):
         height, columns = self.screen.getmaxyx()
@@ -126,7 +132,7 @@ class Launcher:
         self.text(1, 3, "A P O L L O  /  1 1", "accent")
         elapsed = int(time.monotonic() - self.started)
         self.text(1, width - 24, f"SESSION {elapsed // 60:02}:{elapsed % 60:02}", "dim")
-        titles = {"menu": "MISSION CONSOLE", "sources": "SOURCE EXPLORER / SELECT MODULE", "files": "SOURCE EXPLORER / SELECT FILE", "reader": self.source_name, "manual": "FLIGHT MANUAL / COMMAND REFERENCE", "scenes": "ARZI / ANIMATED SCENES", "scene": f"ARZI / {self.player.scene.title.upper()}", "alarms": "ALARM LABORATORY"}
+        titles = {"menu": "MISSION CONSOLE", "sources": "SOURCE EXPLORER / SELECT MODULE", "files": "SOURCE EXPLORER / SELECT FILE", "reader": self.source_name, "manual": "FLIGHT MANUAL / COMMAND REFERENCE", "scenes": "ARZI / ANIMATED SCENES", "scene": f"ARZI / {self.player.scene.title.upper()}", "alarms": "ALARM LABORATORY", "dsky": "ARZI / DSKY / SCRIPTED DESCENT"}
         self.text(3, 3, titles[self.view], "cyan")
         if self.status:
             self.text(4, 3, self.status, "error")
@@ -134,7 +140,7 @@ class Launcher:
         self.screen.refresh()
 
     def draw_menu(self):
-        _, width = self.screen.getmaxyx()
+        height, width = self.screen.getmaxyx()
         left_width = width // 2 - 7 if width >= 100 else width - 8
         self.text(5, 3, "Choose your next mission.", "dim")
         for i, (_, title, description) in enumerate(CATALOG):
@@ -142,7 +148,8 @@ class Launcher:
             style = "selected" if i == self.menu_index else "normal"
             self.text(y, 3, f" {'>' if i == self.menu_index else ' '} [{i + 1}] {title} ".ljust(left_width), style, left_width)
             self.paragraph(y + 1, 10, description, left_width - 7)
-        self.text(20, 3, "Original tools for this fork. Built with Python's standard library.", "dim")
+        if height >= 27:
+            self.text(23, 3, "Original tools for this fork. Built with Python's standard library.", "dim")
         if width >= 100:
             x = width // 2 + 3
             self.text(7, x, "YOUR NEXT STOP", "accent")
@@ -151,10 +158,11 @@ class Launcher:
                 ["VERB     NOUN", " 16       65", "", "V = action    N = data    E = enter", "Read the code. Open the original listing."],
                 ["SHADED PIXEL ART", "6 SCENES / ONE FULL SHOW", "", "Orbit. Land. Liftoff.", "First footsteps. Moon hop.", "", "Lebanese flag / green cedar"],
                 ["CORE SETS  [#.......]  1 / 8", "VAC AREAS  [.....]     0 / 5", "", "1201 / no VAC areas", "1202 / no core sets", "", "An illustrative teaching model."],
+                ["PROG    VERB    NOUN", " 63      16      60", "", "GREEN READOUTS / LIVE KEYPAD", "V37 E 63 E / begin descent", "V35 E / test the lights", "", "Scripted telemetry. Your controls."],
             )
             for i, line in enumerate(previews[self.menu_index]):
                 self.text(9 + i, x, line, "dim")
-        self.footer("J/K or arrows select   ENTER open   1-4 launch   Q quit")
+        self.footer("J/K or arrows select   ENTER open   1-5 launch   Q quit")
 
     def draw_sources(self):
         for i, (name, description) in enumerate(MODULES):
@@ -255,6 +263,72 @@ class Launcher:
             self.paragraph(21, 3, "Try R then M. Each unfinished two-second cycle retains memory. Exhaustion restarts the model, clears the backlog, and drops the monitor.", width - 7)
         self.footer("R radar M monitor C/V pool SPACE pause N +2s X reset ESC")
 
+    def draw_dsky(self):
+        height, width = self.screen.getmaxyx()
+        panel = self.dsky
+        if self.dsky_help:
+            self.text(5, 3, "COMMANDS / type V = VERB, N = NOUN, E = ENTR", "accent")
+            for i, (command, meaning) in enumerate(HELP):
+                self.text(7 + i, 3, command, "green")
+                self.text(7 + i, 18, meaning, width=width - 21)
+            self.text(17, 3, "R1/R2: ft/s. R3: feet. N65: hours/minutes/seconds.", "dim")
+            self.text(18, 3, "C clears entry; Backspace deletes; K releases keyboard.", "dim")
+            self.text(19, 3, "P = PRO; R = RSET; T pauses; ] advances five seconds.", "dim")
+            self.footer("Arrows focus SPACE press / ? or ESC close help")
+            return
+        big = height >= 32
+        bottom = height - 4
+        self.text(5, 3, "+--- ARZI / DISPLAY & KEYBOARD ".ljust(57, "-") + "+", "dim")
+        self.text(bottom, 3, "+" + "-" * 56 + "+", "dim")
+        for y in range(6, bottom):
+            for x in (3, 20, 60):
+                self.text(y, x, "|", "dim")
+        self.text(6, 5, "ANNUNCIATORS", "dim")
+        for i, lamp in enumerate(LAMPS):
+            lit = panel.lit(lamp)
+            style = "green" if lamp == "COMP ACTY" else "error" if lamp in ("PROG", "OPR ERR") else "accent"
+            self.text(7 + i, 5, f"{'*' if lit else '.'} {lamp:<12}", style if lit else "dim")
+        for x, name in zip((25, 36, 47), ("program", "verb", "noun")):
+            active = panel.editing == name
+            self.text(6, x, {"program": "PROG", "verb": "VERB", "noun": "NOUN"}[name] + (" <" if active else ""), "cyan" if active else "dim")
+            value = panel.field(name)
+            for row, line in enumerate(digits(value) if big else (value,)):
+                self.text(7 + row, x, line, "cyan" if active else "green")
+        for i, (label, value) in enumerate(zip(panel.labels, panel.registers)):
+            if big:
+                self.text(10 + i * 4, 23, label, "dim")
+                for row, line in enumerate(digits(value)):
+                    self.text(11 + i * 4 + row, 25, line, "green")
+            else:
+                self.text(9 + i * 2, 23, label, "dim")
+                self.text(9 + i * 2, 45, value, "green")
+        for row, keys in enumerate(KEYPAD):
+            for column, key in enumerate(keys):
+                if not key:
+                    continue
+                focus = row * 5 + column == self.dsky_focus
+                style = "accent" if key == panel.last_key and panel.key_left else "selected" if focus else "normal"
+                self.text((23 if big else 15) + row, 23 + column * 7, f"[{'K REL' if key == 'KEYREL' else key:^5}]", style)
+        message = "01202 / waiting for PRO. P continues the descent." if panel.alert and not panel.error else panel.message
+        self.text(bottom - 1, 5, message, "error" if panel.error or panel.alert else "cyan", 54)
+        if width >= 100:
+            x, space = 66, width - 70
+            self.text(5, x, "SCRIPTED DESCENT / 90 SECONDS", "accent", space)
+            self.paragraph(7, x, panel.phase, space, "error" if panel.alert else "green")
+            state = "PAUSED" if self.paused else "ALARM HOLD" if panel.alert else "LIVE" if panel.running else "IDLE"
+            self.text(9, x, f"T+ {panel.elapsed:05.1f}s   {state}", "cyan", space)
+            length = min(34, space - 2)
+            filled = round(panel.elapsed / 90 * length)
+            self.text(10, x, "[" + "#" * filled + "." * (length - filled) + "]", "green")
+            self.text(12, x, "FLIGHT CARDS / ? FOR ALL COMMANDS", "accent", space)
+            for i, (command, meaning) in enumerate((HELP[0], HELP[1], HELP[2], HELP[4], HELP[6])):
+                self.text(14 + i * (2 if big else 1), x, command if big else f"{command:<14} {meaning}", "green", space)
+                if big:
+                    self.text(15 + i * 2, x, meaning, "dim", space)
+            if big:
+                self.paragraph(25, x, "PRO continues after the scripted 01202 overload. RSET clears OPR ERR.", space)
+        self.footer("Arrows/SPACE keys V/N/E P PRO T pause ] +5s ? help ESC")
+
     def open(self, destination):
         self.view = destination
         self.paused = False
@@ -301,6 +375,9 @@ class Launcher:
             return
         if isinstance(key, str):
             key = key.lower()
+        if self.view == "dsky" and (key == "?" or (self.dsky_help and key == "\x1b")):
+            self.dsky_help = not self.dsky_help
+            return
         if key in ("q", "Q", "\x1b", "b"):
             if self.view == "menu":
                 self.alive = False
@@ -313,7 +390,7 @@ class Launcher:
         delta = int(down) - int(up)
         if self.view == "menu":
             self.menu_index = (self.menu_index + delta) % len(CATALOG)
-            if isinstance(key, str) and key in "1234":
+            if isinstance(key, str) and key in "12345":
                 self.menu_index = int(key) - 1
                 enter = True
             if enter:
@@ -355,6 +432,30 @@ class Launcher:
             if enter:
                 _, _, _, _, filename, line = COMMANDS[self.manual_index]
                 self.open_source("Luminary099", filename, line, "manual")
+        elif self.view == "dsky":
+            if self.dsky_help:
+                return
+            if key in (curses.KEY_LEFT, curses.KEY_RIGHT):
+                self.dsky_keypad = True
+                self.dsky_focus = (self.dsky_focus + (1 if key == curses.KEY_RIGHT else -1)) % 19
+            elif key in (curses.KEY_UP, curses.KEY_DOWN):
+                self.dsky_keypad = True
+                row, column = divmod(self.dsky_focus, 5)
+                self.dsky_focus = min(18, ((row + (1 if key == curses.KEY_DOWN else -1)) % 4) * 5 + column)
+            elif key == "t":
+                self.paused = not self.paused
+            elif key == "]":
+                self.dsky.advance(5)
+            else:
+                # Spaces in typed command cards are separators; arrows enable keypad presses.
+                if key == " " and not self.dsky_keypad:
+                    return
+                mapped = {"v": "VERB", "n": "NOUN", "e": "ENTR", "c": "CLR", "k": "KEYREL", "r": "RSET", "p": "PRO", "\x7f": "BACKSPACE", "\b": "BACKSPACE", curses.KEY_BACKSPACE: "BACKSPACE"}
+                button = KEYPAD[self.dsky_focus // 5][self.dsky_focus % 5] if key == " " else "ENTR" if enter else mapped.get(key, key)
+                if isinstance(button, str):
+                    if key != " ":
+                        self.dsky_keypad = False
+                    self.dsky.press(button)
         elif self.view in ("scene", "alarms"):
             if key == " ":
                 self.paused = not self.paused

@@ -92,7 +92,8 @@ Original Apollo 11 guidance computer (AGC) source code for Command Module (Coman
 ## Mission console (this fork)
 
 Run `npm start` to open our terminal launcher. Choose an Apollo source explorer,
-a numeric command reference, six animated Arzi scenes, or an alarm laboratory.
+a numeric command reference, six animated Arzi scenes, an alarm laboratory, or
+our DSKY computer panel with a working keypad and scripted descent readings.
 Use arrows or J/K to select, Enter to open, and Esc to return.
 
 Requires Python 3.10+ with curses on macOS or Linux. No dependency installation is
