@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CATALOG = (
     ("sources", "Source explorer", "Read the original Command Module and Lunar Module programs."),
     ("manual", "Command reference", "Keep Apollo's verb and noun sequences close at hand."),
-    ("scene", "Arzi descent", "Watch an original terminal animation of the lunar landing."),
+    ("scenes", "Animated scenes", "Orbit, land, lift off, and take one small hop with Arzi."),
     ("alarms", "Alarm laboratory", "Explore memory pressure, overload, and 1201 / 1202 recovery."),
 )
 MODULES = (("Luminary099", "Arzi / Lunar Module"), ("Comanche055", "Columbia / Command Module"))

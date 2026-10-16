@@ -3,21 +3,13 @@
 
 import argparse
 import curses
-import random
 import sys
 import textwrap
 import time
 
 from core import AlarmDemo, CATALOG, COMMANDS, MODULES, read_source, source_files
 
-SHIP = (
-    "       /\\       ",
-    "     _/##\\_     ",
-    "    | ARZI  |    ",
-    "     \\_____/     ",
-    "    /|_||_|\\    ",
-    "   /_      _\\   ",
-)
+from scenes import PIXEL_COLORS, SCENES, ScenePlayer, render_scene
 
 
 class Launcher:
@@ -32,16 +24,18 @@ class Launcher:
         self.source_name = ""
         self.source_parent = "files"
         self.scroll = self.column = 0
-        self.scene_time = 0
+        self.scene_index = 0
+        self.player = ScenePlayer()
         self.paused = False
         self.demo = AlarmDemo()
         self.status = ""
         self.alive = True
         self.started = time.monotonic()
         self.styles = dict.fromkeys(["normal", "dim", "accent", "cyan", "selected", "error"], 0)
+        self.color_enabled = False
+        self.color_pairs = {}
+        self.next_color_pair = 1
         self.counts = {name: len(source_files(name)) for name, _ in MODULES}
-        rng = random.Random(11)
-        self.stars = [(rng.random(), rng.random(), rng.choice("..+*")) for _ in range(65)]
 
     def run(self):
         try:
@@ -59,6 +53,9 @@ class Launcher:
             for number, (name, foreground) in enumerate(zip(self.styles, colors), 1):
                 curses.init_pair(number, foreground, colors[2] if name == "selected" else background)
                 self.styles[name] = curses.color_pair(number)
+                self.color_pairs[(foreground, colors[2] if name == "selected" else background)] = self.styles[name]
+            self.next_color_pair = len(self.styles) + 1
+            self.color_enabled = True
             self.screen.bkgd(" ", self.styles["normal"])
         last = time.monotonic()
         while self.alive:
@@ -76,7 +73,7 @@ class Launcher:
         if self.paused:
             return
         if self.view == "scene":
-            self.scene_time = min(self.scene_time + seconds, 20)
+            self.player.advance(seconds)
         elif self.view == "alarms":
             self.demo.advance(seconds)
 
@@ -87,9 +84,26 @@ class Launcher:
         available = columns - x - 1 if width is None else min(width, columns - x - 1)
         value = "".join(char if char.isprintable() else " " for char in str(value).expandtabs(4))
         try:
-            self.screen.addnstr(y, x, value, max(0, available), self.styles[style])
+            self.screen.addnstr(y, x, value, max(0, available), self.color(style))
         except curses.error:
             pass  # A terminal can resize between measuring it and drawing.
+
+    def color(self, style):
+        if style in self.styles:
+            return self.styles[style]
+        if not self.color_enabled or not style.startswith("pixel:"):
+            return self.styles["normal"]
+        top, bottom = style.split(":")[1:]
+        palette = 0 if curses.COLORS >= 256 else 1
+        pair = (PIXEL_COLORS[top][palette], PIXEL_COLORS[bottom][palette])
+        if pair not in self.color_pairs:
+            if self.next_color_pair >= curses.COLOR_PAIRS:
+                return self.styles["normal"]
+            curses.init_pair(self.next_color_pair, *pair)
+            self.color_pairs[pair] = curses.color_pair(self.next_color_pair)
+            self.next_color_pair += 1
+        self.styles[style] = self.color_pairs[pair]
+        return self.styles[style]
 
     def paragraph(self, y, x, value, width, style="dim"):
         for offset, line in enumerate(textwrap.wrap(value, max(1, width))):
@@ -112,7 +126,7 @@ class Launcher:
         self.text(1, 3, "A P O L L O  /  1 1", "accent")
         elapsed = int(time.monotonic() - self.started)
         self.text(1, width - 24, f"SESSION {elapsed // 60:02}:{elapsed % 60:02}", "dim")
-        titles = {"menu": "MISSION CONSOLE", "sources": "SOURCE EXPLORER / SELECT MODULE", "files": "SOURCE EXPLORER / SELECT FILE", "reader": self.source_name, "manual": "FLIGHT MANUAL / COMMAND REFERENCE", "scene": "ARZI / LUNAR DESCENT", "alarms": "ALARM LABORATORY"}
+        titles = {"menu": "MISSION CONSOLE", "sources": "SOURCE EXPLORER / SELECT MODULE", "files": "SOURCE EXPLORER / SELECT FILE", "reader": self.source_name, "manual": "FLIGHT MANUAL / COMMAND REFERENCE", "scenes": "ARZI / ANIMATED SCENES", "scene": f"ARZI / {self.player.scene.title.upper()}", "alarms": "ALARM LABORATORY"}
         self.text(3, 3, titles[self.view], "cyan")
         if self.status:
             self.text(4, 3, self.status, "error")
@@ -135,7 +149,7 @@ class Launcher:
             previews = (
                 ["COMANCHE 055 / COLUMBIA", f"{self.counts['Comanche055']} original assembly files", "", "LUMINARY 099 / ARZI", f"{self.counts['Luminary099']} original assembly files"],
                 ["VERB     NOUN", " 16       65", "", "V = action    N = data    E = enter", "Read the code. Open the original listing."],
-                list(SHIP) + ["", "The Moon is waiting."],
+                ["SHADED PIXEL ART", "6 SCENES / ONE FULL SHOW", "", "Orbit. Land. Liftoff.", "First footsteps. Moon hop.", "", "Lebanese flag / green cedar"],
                 ["CORE SETS  [#.......]  1 / 8", "VAC AREAS  [.....]     0 / 5", "", "1201 / no VAC areas", "1202 / no core sets", "", "An illustrative teaching model."],
             )
             for i, line in enumerate(previews[self.menu_index]):
@@ -190,32 +204,38 @@ class Launcher:
         self.text(y + 10, x, f"Luminary 099 / source line {line}", "dim")
         self.footer("J/K choose  ENTER read original source  ESC back")
 
+    def draw_scenes(self):
+        height, width = self.screen.getmaxyx()
+        titles = ["Play the full show"] + [scene.title for scene in SCENES]
+        preview = SCENES[max(0, self.scene_index - 1)]
+        description = "All six scenes, from Moon orbit to one small hop." if self.scene_index == 0 else preview.description
+        self.text(5, 3, description, "dim")
+        left_width = width // 2 - 7 if width >= 100 else width - 7
+        for i, title in enumerate(titles):
+            duration = sum(scene.duration for scene in SCENES) if i == 0 else SCENES[i - 1].duration
+            label = f" {'>' if i == self.scene_index else ' '} [{i + 1}] {title:<24} {duration:.0f}s "
+            self.text(7 + i * 2, 3, label.ljust(left_width), "selected" if i == self.scene_index else "normal", left_width)
+        if width >= 100:
+            x = width // 2 + 3
+            self.text(7, x, "PREVIEW / " + preview.title.upper(), "accent")
+            frame, _ = render_scene(max(0, self.scene_index - 1), preview.duration * 0.35, width - x - 4, height - 14)
+            for sx, sy, text, style in frame.runs():
+                self.text(9 + sy, x + sx, text, style)
+        self.footer("J/K select   ENTER play   1-7 launch   ESC back")
+
     def draw_scene(self):
         height, width = self.screen.getmaxyx()
-        progress = self.scene_time / 20
-        self.text(5, 3, "ILLUSTRATIVE ANIMATION / no spacecraft physics", "dim")
-        ground = height - 7
-        for sx, sy, glyph in self.stars:
-            y, x = 7 + int(sy * max(1, ground - 9)), 4 + int(sx * (width - 9))
-            if (int(self.scene_time * 2) + int(sx * 30)) % 7:
-                self.text(y, x, glyph, "dim")
-        self.text(8, width - 15, " .--. ", "cyan")
-        self.text(9, width - 15, "(EARTH)", "cyan")
-        self.text(10, width - 15, " '--' ", "cyan")
-        y = 7 + int((ground - 7 - len(SHIP)) * (1 - (1 - progress) ** 2))
-        x = width // 2 - 8
-        for i, line in enumerate(SHIP):
-            self.text(y + i, x, line)
-        if progress < 1:
-            self.text(y + len(SHIP), x + 6, "/\\/\\", "accent")
-        if progress > 0.8:
-            dust = ".. : ." if int(self.scene_time * 8) % 2 else ". : .."
-            self.text(ground - 1, x - 9, dust, "dim")
-            self.text(ground - 1, x + 21, dust[::-1], "dim")
-        self.text(ground, 3, "_" * (width - 7), "dim")
-        self.text(ground + 1, 5, "SEA OF TRANQUILITY", "dim")
-        self.text(ground + 2, 5, "CONTACT. THE ARZI HAS LANDED." if progress == 1 else f"DESCENT {progress:.0%}  /  {'PAUSED' if self.paused else 'PLAYING'}", "accent")
-        self.footer("SPACE pause/resume   R replay   ESC back")
+        frame, caption = render_scene(self.player.index, self.player.elapsed, width - 6, height - 12)
+        self.text(5, 3, caption, "cyan")
+        for x, y, text, style in frame.runs():
+            self.text(7 + y, 3 + x, text, style)
+        state = "PAUSED" if self.paused else "COMPLETE" if self.player.finished else "PLAYING"
+        mode = "SHOW" if self.player.play_all else "SOLO"
+        self.text(height - 5, 3, f"{self.player.index + 1}/6  {mode}  {self.player.elapsed:04.1f}/{self.player.scene.duration:.0f}s  {state}", "accent")
+        size = min(44, width - 8)
+        filled = round(self.player.elapsed / self.player.scene.duration * size)
+        self.text(height - 4, 3, "[" + "#" * filled + "." * (size - filled) + "]", "dim")
+        self.footer("SPACE pause  R replay  LEFT/RIGHT scene  [/] seek  ESC back")
 
     def draw_alarms(self):
         height, width = self.screen.getmaxyx()
@@ -239,9 +259,7 @@ class Launcher:
         self.view = destination
         self.paused = False
         self.status = ""
-        if destination == "scene":
-            self.scene_time = 0
-        elif destination == "alarms":
+        if destination == "alarms":
             self.demo = AlarmDemo()
 
     def open_source(self, module, filename, line=1, parent="files"):
@@ -264,6 +282,8 @@ class Launcher:
             self.view = self.source_parent
         elif self.view == "files":
             self.view = "sources"
+        elif self.view == "scene":
+            self.view = "scenes"
         else:
             self.view = "menu"
 
@@ -298,6 +318,14 @@ class Launcher:
                 enter = True
             if enter:
                 self.open(CATALOG[self.menu_index][0])
+        elif self.view == "scenes":
+            self.scene_index = (self.scene_index + delta) % (len(SCENES) + 1)
+            if isinstance(key, str) and key in "1234567":
+                self.scene_index = int(key) - 1
+                enter = True
+            if enter:
+                self.player.select(max(0, self.scene_index - 1), play_all=self.scene_index == 0)
+                self.open("scene")
         elif self.view == "sources":
             self.module_index = (self.module_index + delta) % len(MODULES)
             if enter:
@@ -330,8 +358,15 @@ class Launcher:
         elif self.view in ("scene", "alarms"):
             if key == " ":
                 self.paused = not self.paused
-            if self.view == "scene" and key in ("r", "R"):
-                self.scene_time = 0
+            if self.view == "scene":
+                if key == "r":
+                    self.player.elapsed = 0
+                elif key in (curses.KEY_LEFT, curses.KEY_UP, "h", "k"):
+                    self.player.select((self.player.index - 1) % len(SCENES))
+                elif key in (curses.KEY_RIGHT, curses.KEY_DOWN, "l", "j"):
+                    self.player.select((self.player.index + 1) % len(SCENES))
+                elif key in ("[", "]"):
+                    self.player.seek(2 if key == "]" else -2)
             elif self.view == "alarms":
                 if key in ("r", "R"):
                     self.demo.radar = not self.demo.radar

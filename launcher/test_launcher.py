@@ -32,7 +32,7 @@ class LauncherTests(unittest.TestCase):
         self.app = Launcher(self.screen)
 
     def test_every_menu_destination_opens_returns_and_quit_exits(self):
-        for key, view in [("1", "sources"), ("2", "manual"), ("3", "scene"), ("4", "alarms")]:
+        for key, view in [("1", "sources"), ("2", "manual"), ("3", "scenes"), ("4", "alarms")]:
             self.app.handle_key(key)
             self.assertEqual(self.app.view, view)
             self.app.handle_key("q")
@@ -88,23 +88,68 @@ class LauncherTests(unittest.TestCase):
     def test_pause_preserves_animation_and_alarm_time_then_step_and_resume_work(self):
         for key in ("3", "4"):
             self.app.handle_key(key)
+            if key == "3":
+                self.app.handle_key("\n")
             self.app.tick(1)
-            before = (self.app.scene_time, self.app.demo.elapsed)
+            before = (self.app.player.elapsed, self.app.demo.elapsed)
             self.app.handle_key(" ")
             self.app.tick(1)
-            self.assertEqual((self.app.scene_time, self.app.demo.elapsed), before)
+            self.assertEqual((self.app.player.elapsed, self.app.demo.elapsed), before)
             if key == "4":
                 self.app.handle_key("n")
                 self.assertEqual(self.app.demo.elapsed, before[1] + 2)
             self.app.handle_key(" ")
             self.app.tick(1)
-            self.assertNotEqual((self.app.scene_time, self.app.demo.elapsed), before)
+            self.assertNotEqual((self.app.player.elapsed, self.app.demo.elapsed), before)
             self.app.handle_key("\x1b")
+            if key == "3":
+                self.app.handle_key("\x1b")
+
+    def test_scene_picker_launches_each_scene_and_preserves_its_selection_on_return(self):
+        self.app.handle_key("3")
+        for key in "1234567":
+            self.app.handle_key(key)
+            self.assertEqual(self.app.view, "scene")
+            self.assertEqual(self.app.player.index, max(0, int(key) - 2))
+            self.assertEqual(self.app.player.play_all, key == "1")
+            self.app.handle_key("\x1b")
+            self.assertEqual((self.app.view, self.app.scene_index), ("scenes", int(key) - 1))
+        self.app.handle_key("\x1b")
+        self.assertEqual(self.app.view, "menu")
+
+    def test_paused_scene_supports_seek_replay_and_next_without_resuming(self):
+        self.app.handle_key("3")
+        self.app.handle_key("3")
+        self.app.tick(1)
+        self.app.handle_key(" ")
+        self.app.handle_key("]")
+        self.assertEqual(self.app.player.elapsed, 3)
+        self.app.tick(2)
+        self.assertEqual(self.app.player.elapsed, 3)
+        self.app.handle_key("r")
+        self.assertEqual(self.app.player.elapsed, 0)
+        self.app.handle_key("l")
+        self.assertEqual(self.app.player.scene.id, "landing")
+        self.assertTrue(self.app.paused)
+        self.app.handle_key(" ")
+        self.app.tick(1)
+        self.assertEqual(self.app.player.elapsed, 1)
+
+    def test_pixel_colors_reuse_pairs_on_eight_color_terminals_and_handle_limits(self):
+        self.app.color_enabled = True
+        with patch("main.curses.COLORS", 8, create=True), patch("main.curses.COLOR_PAIRS", 16, create=True), patch("main.curses.init_pair") as init, patch("main.curses.color_pair", side_effect=lambda n: n * 256):
+            first = self.app.color("pixel:red:white")
+            same = self.app.color("pixel:red:metal")
+            self.assertEqual(first, same)
+            init.assert_called_once_with(1, 1, 7)
+            self.app.next_color_pair = 16
+            self.assertEqual(self.app.color("pixel:green:white"), self.app.styles["normal"])
+            self.assertEqual(self.app.color("pixel:red:white"), first)
 
     def test_all_views_fit_normal_narrow_and_tiny_terminal_sizes(self):
         for height, width in [(32, 110), (24, 64), (10, 30)]:
             self.screen.height, self.screen.width = height, width
-            for view in ("menu", "sources", "files", "reader", "manual", "scene", "alarms"):
+            for view in ("menu", "sources", "files", "reader", "manual", "scenes", "scene", "alarms"):
                 with self.subTest(height=height, width=width, view=view):
                     self.app.view = view
                     self.app.draw()

@@ -35,7 +35,7 @@ on Ctrl+C. Tools do not write to the Apollo source files.
 | --- | --- |
 | Source explorer | Browse both Luminary 099 and Comanche 055, then read an original assembly listing with line numbers. |
 | Command reference | Six numeric sequences with their meanings, individual keys, and links into the local assembly listing. |
-| Arzi descent | A terminal animation with the lander, stars, Earth, lunar surface, engine plume, and landing dust. |
+| Animated scenes | Six original Arzi scenes with orbit, descent, landing, liftoff, astronauts, and a playful platform sequence. |
 | Alarm laboratory | An interactive teaching model of finite core-set and VAC pools, overload, and restart recovery. |
 
 ### Source explorer
@@ -56,11 +56,44 @@ The reference includes lamp test, P00 selection, sampled AGC time, alarm readbac
 rope-memory checksum, and fresh start. It teaches the sequences; it does not send
 commands to a DSKY or run the guidance software.
 
-### Arzi descent
+### Animated scenes
 
-The animation runs for twenty seconds, then holds at touchdown. **Space** pauses
-or resumes; **R** replays. This is illustrative artwork, without spacecraft
-physics, actual mission timing, or AGC control.
+Choose **3** from the main menu to open the scene collection. J/K or arrows
+selects an entry; Enter plays it. **1** plays the full 96-second show; **2–7**
+opens an individual scene. Wider terminals show a preview beside the selection.
+
+| Scene | What happens |
+| --- | --- |
+| Moon orbit | Arzi glides around a shaded, cratered Moon under gently drifting stars. |
+| Powered descent | Arzi approaches Tranquility with a flickering engine plume and Earth in the sky. |
+| Touchdown | A soft approach, contact, engine shutdown, and settling dust. |
+| Arzi liftoff | Ignition, a dust cloud, and a climb out of the lunar view. |
+| First footsteps | An astronaut sets the pole, unfurls the Lebanese flag, salutes, and returns to Arzi. |
+| Moon hop | A playful astronaut jumps blocks, collects three stars, raises the Lebanese flag, and boards Arzi. |
+
+| During playback | Action |
+| --- | --- |
+| Space | Pause or resume the current frame |
+| R | Replay the current scene from the beginning |
+| Left/Right or H/L | Play the previous/next scene individually |
+| [ / ] | Seek backward/forward two seconds within the current scene, even while paused |
+| Esc, B, or Q | Return to the scene picker |
+
+The full show advances automatically, then holds on its final frame. Moon orbit
+loops when played individually; the other individual scenes hold at their ending.
+Pausing also freezes flames, dust, and stars. Replay is deterministic. Window
+resizing redraws the same point in the scene for the new stage size.
+
+All artwork is drawn by our terminal renderer using shaded pixel sprites and
+half-block characters, which provide two vertical pixels per terminal row.
+The Lebanese flag has red upper and lower bands, a white center, and a green
+cedar. The astronaut sets the pole, unfurls the cloth, pauses to salute, then
+returns to Arzi; the flag stays planted. Use a UTF-8 terminal font for the pixel
+art. A 256-color terminal gives the full palette; basic color terminals use a
+smaller palette.
+Moon hop is a scripted platform animation, with the same playback controls as the
+other scenes. The collection is illustrative artwork, without spacecraft physics,
+actual mission timing, or AGC control.
 
 ### Alarm laboratory
 
@@ -97,4 +130,6 @@ npm run test:launcher
 Or `python3 -m unittest discover -s launcher -p 'test_*.py'`.
 Tests cover opening and returning from every tool, source filtering and failures,
 reference-to-source navigation, pause/resume, terminal sizes, path boundaries,
-stable loads, and both alarm/recovery paths. No test dependencies are required.
+stable loads, both alarm/recovery paths, deterministic scene replay, full-show
+transitions, seek boundaries, touchdown and settling, Lebanese flag colors and cedar, unfurling and saluting,
+pixel layering, limited terminal palettes, and the platform sequence. No test dependencies are required.

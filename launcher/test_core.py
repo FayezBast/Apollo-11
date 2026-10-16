@@ -9,7 +9,7 @@ from core import AlarmDemo, CATALOG, COMMANDS, read_source, source_files
 
 class CatalogTests(unittest.TestCase):
     def test_menu_has_unique_working_destinations(self):
-        self.assertEqual({entry[0] for entry in CATALOG}, {"sources", "manual", "scene", "alarms"})
+        self.assertEqual({entry[0] for entry in CATALOG}, {"sources", "manual", "scenes", "alarms"})
         self.assertEqual(len(CATALOG), len({entry[0] for entry in CATALOG}))
 
     def test_manual_points_to_real_source_lines(self):
